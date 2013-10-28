@@ -1,0 +1,77 @@
+#! /bin/bash
+# needs bash for arrays
+set -e
+
+# requires: bash, tatort-dl, rtmpdump, curl, libxml-xpath-perl
+
+nlast=1
+
+cleanup() {
+    [ -n "$feed" ] && {
+        rm -f "$feed"
+    }
+}
+
+
+while getopts c:d:p:h flag; do
+    case "$flag" in
+      c) nlast="$OPTARG"
+         ;;
+      d) outdir="$OPTARG"
+         ;;
+      p) prune="$OPTARG"
+         ;;
+      ?|h) cat >&2 <<EOF
+Prefetches contents of ARD Mediathek RSS feeds
+Usage:
+  $0 [-c <COUNT>] [-p <COUNT>] [-d <DIR>] <RSS URL>
+
+Options:
+  -c <COUNT>    download COUNT latest shows from RSS feed
+  -p <COUNT>    delete all but the COUNT latest files (warning: dangerous)
+  -d <DIR>      Download files into DIR (instead of current working directory)
+
+  <RSS URL>     URL to Mediathek RSS feeds, e.g.,
+                http://www.ardmediathek.de/export/rss/id=1458
+EOF
+         exit 1
+         ;;
+    esac
+done
+shift $(( OPTIND - 1 ));
+
+[ $# -ne 1 ] && {
+    echo >&2 "$0: wrong number of arguments"
+}
+
+rssurl="$1"; shift;
+
+trap "cleanup" EXIT
+feed="`mktemp --tmpdir feed-XXXXXX.xml`"
+
+[ -n "$outdir" ] && {
+    mkdir -p "$outdir"
+    cd "$outdir"
+}
+
+curl "$rssurl" -o "$feed"
+
+IFS=$'\n'
+# slow: xpath -q -e "(//item/link)[position() <= $nlast]/text()"
+l="$(sed -ne "s#.*<link>\(.*\)</link>.*#\1#p" "$feed" | head -$nlast)"
+urls=( $l )
+l="$(xpath -q -e "(//item/title)[position() <= $nlast]/text()" "$feed" )"
+titles=( $l )
+
+for i in $(seq 1 ${#urls[@]}); do
+    tatort-dl -q "${urls[$i-1]}" "${titles[$i-1]}.flv" || true
+done
+
+[ -n "$prune" ] && {
+    [ -z "$outdir" ] && {
+        echo >&2 "cowardly refusing to prune without specifying directory (-d)"
+        exit 1
+    }
+    ls -t | awk "NR > $prune { printf \"%s\\0\",\$0 }" | xargs -0r rm
+}
+
