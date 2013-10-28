@@ -1,0 +1,211 @@
+#!/bin/bash
+# tatort-dl - download movies from ARDmediathek using rtmpdump
+# Copyright (C) 2010-2012 Robin Gareus <robin@gareus.org>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+
+RTMPDUMP=${RTMPDUMP:-rtmpdump}
+INTERACTIVE=
+GETURLONLY=
+QUIET=
+
+while getopts ":Vhigq" opt; do
+  case $opt in
+    V)
+      echo "tator-dl v2013-01-28"
+      echo
+      echo "Copyright (C) 2010-2013 Robin Gareus"
+      echo "This is free software; see the source for copying conditions.  There is NO"
+      echo "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+      exit 0
+      ;;
+    h)
+      echo "tatort-dl - CLI tool for downloading films from http://www.ardmediathek.de/. "
+      echo
+      echo "Usage: tatort-dl [-i] [-g] [-q] <ARDmediathek-URL> [OutFileName] "
+      echo
+      echo "Wrapper script to parse rtmp and mp4 URLs from the ard-mediathek and launch"
+      echo "a download using 'rtmpdump'."
+      echo "The default out-file name is ./format<ard-uid>.flv"
+      echo "-i option: interactive mode - ask before taking any action."
+      echo "-g option: get URL - just print rtmp URL and exit"
+      echo "-q option: quiet, inhibit usual output"
+      echo
+      echo "Environment:"
+      echo "RTMPDUMP=rtmpdump"
+      echo
+      echo "Example:"
+      echo "tatort-dl \"http://www.ardmediathek.de/ard/servlet/content/3517136?documentId=3701294\""
+      echo
+      echo "Report bugs to <robin@gareus.org>."
+      echo "Website http://gareus.org/wiki/tatort-dl"
+      exit 0
+      ;;
+    q)
+      QUIET=yes
+      shift;
+      ;;
+    g)
+      GETURLONLY=yes
+      QUIET=yes
+      shift;
+      ;;
+    i)
+      INTERACTIVE=yes
+      shift;
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+
+URL=$(echo -e "$1" | grep "^http")
+OUTFILE=$2
+
+RTMPDUMPOPTS=""
+#RTMPDUMPOPTS+=" --live"
+#RTMPDUMPOPTS+=" --resume"
+#RTMPDUMPOPTS+=" --quiet"
+
+if test -z "$URL" ; then
+  echo -e "Error: missing or invalid parameters\n\nUsage:\n $0 <ARDmediathek-URL> [out-file]\nThe deafult out-file name is ./format<ard-uid>.f4v\n\nExample:\n $0 \"http://www.ardmediathek.de/ard/servlet/content/3517136?documentId=3701294\"\n" >&2;
+  exit 1
+fi
+
+[[ -z "$QUIET" ]] && echo -en "curl \"$URL\" .."
+RTMPURLS=$(curl -s "$URL" | grep -i rtmp) 
+
+
+if test -z "$RTMPURLS" ; then 
+  echo  -e "\nError: no 'rtmp://' URLs were found on the given Page.\n" >&2
+  exit 1;
+fi
+
+COUNT=$(echo -e "$RTMPURLS" | wc -l)
+[[ -z "$QUIET" ]] && echo -e " ..found $COUNT RTMP URL(s)."
+
+urldecode(){
+  echo -e "$(sed 'y/+/ /; s/%/\\x/g')"
+}
+
+FLASH=$(echo "$RTMPURLS" | grep flashvars | tail -n1) 
+if test -n "$FLASH"; then
+
+  RTMPURL=$(echo -ne "$FLASH" \
+            | sed 's/^.*streamer=\([^&]*\)&.*$/\1/g' \
+            | urldecode)
+  PLAYPATH=$(echo -ne "$FLASH" \
+             | sed 's/^.*file=\([^&]*\)&.*$/\1/g' \
+             | urldecode)
+  #echo "RTMP: $RTMPURL"
+  #echo "FILE: $PLAYPATH"
+
+else 
+
+  # try high-qualty first
+  PARAM=$(echo "$RTMPURLS" | grep Web-L) 
+  # fall-back to medium-qualty 
+  if test -z "$PARAM"; then
+    PARAM=$(echo "$RTMPURLS" | grep Web-M) 
+  fi
+  # 2nd fall-back: use any rtmp URL 
+  if test -z "$PARAM"; then
+    PARAM=$(echo "$RTMPURLS" | tail -n 1 ) 
+  fi
+
+  RTMPURL=$(echo -ne "$PARAM" | sed 's/^.*"\(rtmp[t]*:[^"]*\)",.*$/\1/g')
+  PLAYPATH=$(echo -ne "$PARAM" | sed 's/^.*"\(mp4:[^"]*\)"[),].*$/\1/g')
+fi
+
+test -z "$RTMPURL" && RTMPURL="rtmp://vod.daserste.de/ardfs/"
+
+if test -n "$GETURLONLY"; then
+  PLAYPATH2=$(echo -ne "$PLAYPATH" | sed 's/^mp4://g')
+  echo -n "$RTMPURL$PLAYPATH2"
+  exit
+fi
+
+if test -z "$OUTFILE"; then
+  OUTFILE=$(echo -ne "$PLAYPATH" | sed 's/^mp4:.*\/\([^\/?]*\)\?.*$/\1/g')
+  OUTFILE=$(echo -ne "$OUTFILE" \
+            | sed 's/^.*\///g' \
+            | sed 's/\?.*$//g' \
+            | sed 's/mp4://g' \
+            | sed 's/\.f4v$//' \
+            | sed 's/\.flv$//'\
+           )
+  OUTFILE="${OUTFILE}.flv"
+fi
+
+if test -z "$QUIET"; then
+  echo
+  echo "Parameters:"
+  echo " RTMP-URL : $RTMPURL"
+  echo " Playpath : $PLAYPATH"
+  echo " Saving to: $OUTFILE"
+  echo -n " PWD      : "
+  pwd
+  echo
+fi
+
+if test -z "$PLAYPATH -o -z "$OUTFILE ; then
+ echo "Error: empty playpath or blank output filename." >&2
+ exit 1
+fi
+
+if test -e "$OUTFILE"; then
+  echo "WARNING: output file "$OUTFILE" exists." >&2
+  if test -n "$INTERACTIVE"; then
+    echo -n "[A]bort/[d]elete it/[r]esume? [A/d/r]? "
+    read -n 1 VAL
+    echo
+    if test "$VAL" == "d"; then 
+      rm -i "$OUTFILE";
+    elif test "$VAL" == "r"; then 
+      RTMPDUMPOPTS+=" --resume"
+    else
+      exit;
+    fi
+  else # NON-INTERACTIVE
+    echo "Error: file exists. bailing out."
+    exit
+  fi
+fi
+
+if test -n "$INTERACTIVE"; then
+  echo "rtmpdump command-line:"
+  echo " #$RTMPDUMP $RTMPDUMPOPTS -o \"$OUTFILE\" --playpath \"$PLAYPATH\" -r $RTMPURL"
+  echo
+
+  echo -n " Start Download ? [Y/n] "
+  read -n 1 VAL
+  echo
+  if test "$VAL" == "n" -o "$VAL" == "N";  then 
+    exit;
+  fi
+fi
+
+$RTMPDUMP $RTMPDUMPOPTS -o "$OUTFILE" --playpath "$PLAYPATH" -r $RTMPURL
+
+if test -z "$QUIET"; then
+  echo
+  ls -l "$OUTFILE"
+fi
