@@ -1,0 +1,7 @@
+#! /bin/sh
+set -e
+exec >> ~/.xbmc/temp/downloads.log 2>&1
+
+# only needed for cron?!
+export PATH=$HOME/bin:$PATH
+mediathek-dl -c 1 -p 5 -d ~/Videos/Maus http://www.ardmediathek.de/export/rss/id=1458
