@@ -166,7 +166,7 @@ if test -z "$QUIET"; then
   echo
 fi
 
-if test -z "$PLAYPATH -o -z "$OUTFILE ; then
+if test -z "$PLAYPATH" -o -z "$OUTFILE" ; then
  echo "Error: empty playpath or blank output filename." >&2
  exit 1
 fi
