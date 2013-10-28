@@ -81,6 +81,7 @@ URL=$(echo -e "$1" | grep "^http")
 OUTFILE=$2
 
 RTMPDUMPOPTS=""
+RTMPDUMPOPTS+=" --resume"
 #RTMPDUMPOPTS+=" --live"
 #RTMPDUMPOPTS+=" --resume"
 #RTMPDUMPOPTS+=" --quiet"
@@ -169,25 +170,6 @@ fi
 if test -z "$PLAYPATH" -o -z "$OUTFILE" ; then
  echo "Error: empty playpath or blank output filename." >&2
  exit 1
-fi
-
-if test -e "$OUTFILE"; then
-  echo "WARNING: output file "$OUTFILE" exists." >&2
-  if test -n "$INTERACTIVE"; then
-    echo -n "[A]bort/[d]elete it/[r]esume? [A/d/r]? "
-    read -n 1 VAL
-    echo
-    if test "$VAL" == "d"; then 
-      rm -i "$OUTFILE";
-    elif test "$VAL" == "r"; then 
-      RTMPDUMPOPTS+=" --resume"
-    else
-      exit;
-    fi
-  else # NON-INTERACTIVE
-    echo "Error: file exists. bailing out."
-    exit
-  fi
 fi
 
 if test -n "$INTERACTIVE"; then
