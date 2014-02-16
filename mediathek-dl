@@ -76,6 +76,6 @@ done
         echo >&2 "cowardly refusing to prune without specifying directory (-d)"
         exit 1
     }
-    ls -t | awk "NR > $prune { printf \"%s\\0\",\$0 }" | xargs -0r rm
+    ls -tQ | awk "NR > $prune" | xargs -r rm
 }
 
