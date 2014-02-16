@@ -57,14 +57,18 @@ feed="`mktemp --tmpdir feed-XXXXXX.xml`"
 curl "$rssurl" -o "$feed"
 
 IFS=$'\n'
-# slow: xpath -q -e "(//item/link)[position() <= $nlast]/text()"
-l="$(sed -ne "s#.*<link>\(.*\)</link>.*#\1#p" "$feed" | head -$nlast)"
+# l="$(sed -ne "s#.*<link>\(.*\)</link>.*#\1#p" "$feed" | head -$nlast)"
+l="$(xpath -q -e "(//item/link)[position() <= $nlast]/text()" "$feed" )"
 urls=( $l )
 l="$(xpath -q -e "(//item/title)[position() <= $nlast]/text()" "$feed" )"
 titles=( $l )
+l="$(xpath -q -e "(//item/pubDate)[position() <= $nlast]/text()" "$feed" )"
+dates=( $l )
 
+echo >&2 "Downloading $urls"
 for i in $(seq 1 ${#urls[@]}); do
-    tatort-dl -q "${urls[$i-1]}" "${titles[$i-1]}.flv" || true
+    id=$(date --date="${dates[$i-1]}" -I)
+    tatort-dl -q "${urls[$i-1]}" "${titles[$i-1]}_$id.flv" || true
 done
 
 [ -n "$prune" ] && {
