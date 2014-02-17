@@ -76,6 +76,8 @@ done
         echo >&2 "cowardly refusing to prune without specifying directory (-d)"
         exit 1
     }
-    ls -tQ | awk "NR > $prune" | xargs -r rm
+    # do not delete what we downloaded just now
+    if [ ${#urls[@]} -le "$prune" ]; then
+        ls -tQ | awk "NR > $prune" | xargs -r rm
+    fi
 }
-
