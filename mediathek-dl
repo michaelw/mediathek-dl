@@ -15,11 +15,11 @@ cleanup() {
 
 while getopts c:d:p:h flag; do
     case "$flag" in
-      c) nlast="$OPTARG"
+      c) nlast=$OPTARG
          ;;
-      d) outdir="$OPTARG"
+      d) outdir=$OPTARG
          ;;
-      p) prune="$OPTARG"
+      p) prune=$OPTARG
          ;;
       ?|h) cat >&2 <<EOF
 Prefetches contents of ARD Mediathek RSS feeds
