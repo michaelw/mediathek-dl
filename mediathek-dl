@@ -2,7 +2,8 @@
 # needs bash for arrays
 set -e
 
-# requires: bash, tatort-dl, rtmpdump, curl, libxml-xpath-perl, recode
+# requires: bash, tatort-dl, rtmpdump, curl, libxml-xpath-perl, md5sum, recode
+# optional: youtube-upload
 
 nlast=1
 
@@ -13,13 +14,21 @@ cleanup() {
 }
 
 
-while getopts c:d:p:h flag; do
+while getopts c:d:p:t:l:h flag; do
     case "$flag" in
-      c) nlast="$OPTARG"
+      c) nlast=$OPTARG
          ;;
-      d) outdir="$OPTARG"
+      d) outdir=$OPTARG
          ;;
-      p) prune="$OPTARG"
+      p) prune=$OPTARG
+         ;;
+      t) ytopts=( $OPTARG )
+         command -v youtube-upload >/dev/null 2>&1 || {
+             echo "youtube-upload not found in PATH ($PATH)"
+             exit 1
+         }
+         ;;
+      l) ytplaylist="$OPTARG"
          ;;
       ?|h) cat >&2 <<EOF
 Prefetches contents of ARD Mediathek RSS feeds
@@ -30,6 +39,11 @@ Options:
   -c <COUNT>    download COUNT latest shows from RSS feed
   -p <COUNT>    delete all but the COUNT latest files (warning: dangerous)
   -d <DIR>      Download files into DIR (instead of current working directory)
+  -t <ARGS>     Upload using youtube-upload; ARGS are passed to youtube-upload
+  -l <URI>      YouTube playlist URI, passed to youtube-upload; example:
+                http://gdata.youtube.com/feeds/api/playlists/<ID>, where ID is
+                taken from a playlist URL:
+                http://www.youtube.com/playlist?list=<ID>
 
   <RSS URL>     URL to Mediathek RSS feeds, e.g.,
                 http://www.ardmediathek.de/export/rss/id=1458
@@ -68,7 +82,20 @@ dates=( $l )
 echo >&2 "Downloading $urls"
 for i in $(seq 1 ${#urls[@]}); do
     id=$(date --date="${dates[$i-1]}" -I)
-    tatort-dl -q "${urls[$i-1]}" "${titles[$i-1]}_$id.flv" || true
+    outfile="${titles[$i-1]}_$id.flv"
+    origmd5=$(md5sum "$outfile" || true)
+    tatort-dl -q "${urls[$i-1]}" "$outfile" || true
+    newmd5=$(md5sum "$outfile" || true)
+    if [ -n "$ytopts" ] && ! [ "$origmd5" = "$newmd5" ]; then
+        title=${titles[$i-1]}
+        url=$(youtube-upload -t "$title" ${ytopts[@]} "$outfile")
+        if [ $? = 0 ] && [ -n "$ytplaylist" ]; then
+            # fortunately youtube-upload tolerates irrelevant options
+            youtube-upload ${ytopts[@]} --add-to-playlist="$ytplaylist" "$url"
+        else
+            echo >&2 "upload failed: $outfile"
+        fi
+    fi
 done
 
 [ -n "$prune" ] && {
@@ -76,6 +103,8 @@ done
         echo >&2 "cowardly refusing to prune without specifying directory (-d)"
         exit 1
     }
-    ls -t | awk "NR > $prune" | xargs -d'\012' -r rm
+    # do not delete what we downloaded just now
+    if [ ${#urls[@]} -le "$prune" ]; then
+        ls -t | awk "NR > $prune" | xargs -d'\012' -r rm
+    fi
 }
-
