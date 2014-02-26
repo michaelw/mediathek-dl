@@ -2,7 +2,7 @@
 # needs bash for arrays
 set -e
 
-# requires: bash, tatort-dl, rtmpdump, curl, libxml-xpath-perl
+# requires: bash, tatort-dl, rtmpdump, curl, libxml-xpath-perl, recode
 
 nlast=1
 
@@ -54,7 +54,7 @@ feed="`mktemp --tmpdir feed-XXXXXX.xml`"
     cd "$outdir"
 }
 
-curl "$rssurl" -o "$feed"
+curl "$rssurl" | recode ..utf8 > "$feed"
 
 IFS=$'\n'
 # l="$(sed -ne "s#.*<link>\(.*\)</link>.*#\1#p" "$feed" | head -$nlast)"
