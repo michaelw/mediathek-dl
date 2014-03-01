@@ -2,8 +2,11 @@
 # needs bash for arrays
 set -e
 
-# requires: bash, tatort-dl, rtmpdump, curl, libxml-xpath-perl, md5sum, recode
+# requires: bash, tatort-dl, rtmpdump, curl, libxml-xpath-perl, md5sum
 # optional: youtube-upload
+
+# for xpath
+export PYTHONIOENCODING=UTF-8
 
 nlast=1
 
@@ -68,7 +71,7 @@ feed="`mktemp --tmpdir feed-XXXXXX.xml`"
     cd "$outdir"
 }
 
-curl "$rssurl" | recode ..utf8 > "$feed"
+curl "$rssurl" -o "$feed"
 
 IFS=$'\n'
 # l="$(sed -ne "s#.*<link>\(.*\)</link>.*#\1#p" "$feed" | head -$nlast)"
