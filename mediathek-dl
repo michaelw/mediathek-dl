@@ -6,6 +6,8 @@ set -e
 # optional: youtube-upload
 
 # for xpath
+export PERL_UNICODE=SAD
+# for youtube-upload
 export PYTHONIOENCODING=UTF-8
 
 nlast=1
